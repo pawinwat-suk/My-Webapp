@@ -1,0 +1,323 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>RC Design SDM</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{--bg:#f3f6fb;--c:#fff;--t:#1b2333;--m:#5d6b85;--p:#2563eb;--ok:#15803d;--no:#dc2626;--b:#dbe2ee;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1420;--c:#171f30;--t:#e8ecf5;--m:#9aa6bd;--p:#6ea0ff;--ok:#4ade80;--no:#f87171;--b:#2b3650;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px/1.6 Sarabun,sans-serif}
+header{background:linear-gradient(120deg,#1e3a8a,#2563eb);color:#fff;padding:14px 16px}header h1{margin:0;font-size:20px}header small{opacity:.85}
+nav{display:flex;gap:8px;overflow-x:auto;padding:10px 12px}nav button{white-space:nowrap;border:1px solid var(--b);background:var(--c);color:var(--t);padding:8px 14px;border-radius:20px;font:inherit;cursor:pointer}nav button.on{background:var(--p);color:#fff;border-color:var(--p)}
+main{display:grid;gap:12px;padding:0 12px 24px;max-width:1100px;margin:auto}.card{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:14px}
+h3{margin:14px 0 6px;font-size:16px;color:var(--p)}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+label{display:flex;flex-direction:column;font-size:12.5px;color:var(--m)}input,select{font:inherit;padding:7px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t);min-width:0}
+.go,.pb{background:var(--p);color:#fff;border:0;border-radius:10px;padding:11px 18px;font:600 15px Sarabun;margin-top:12px;cursor:pointer}
+.rh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.rh h2{margin:0;font-size:18px}.bd{padding:6px 12px;border-radius:20px;font-weight:700;color:#fff;white-space:nowrap}.bd.ok{background:var(--ok)}.bd.no{background:var(--no)}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{border:1px solid var(--b);padding:5px 7px;text-align:left;vertical-align:top}th{background:var(--bg)}
+.ol{overflow-wrap:anywhere}ol{padding-left:20px}li{margin:4px 0;overflow-wrap:anywhere}.cv{height:240px;margin:10px 0;position:relative}.ft{text-align:center;color:var(--m);font-size:12px;margin-top:14px}
+.p{color:var(--ok);font-weight:700}.f{color:var(--no);font-weight:700}.v3{height:360px;border:1px solid var(--b);border-radius:10px;overflow:hidden;background:var(--bg)}.v3 canvas{display:block}
+.sg{background:#fee2e2;color:#7f1d1d;border-radius:8px;padding:8px 12px}
+@media print{@page{size:A4;margin:12mm}body{background:#fff;color:#000;font-size:12px}header,nav,#in,.noprint{display:none!important}.card{border:0;padding:0}.cv{break-inside:avoid;height:220px}tr,li{break-inside:avoid}:root{--t:#000;--c:#fff;--b:#bbb;--bg:#f2f2f2;--m:#444}}
+</style></head><body>
+<header><h1>RC Design • วิธีกำลัง (SDM)</h1><small>ACI 318 / วสท. / มยผ. • พัฒนาโดย นายปวินท์วัฒน์ สุขขี</small></header>
+<nav id="tabs"></nav>
+<main><section id="in" class="card">
+<label>ประเภทย่อย<select id="sub"></select></label>
+<h3>ข้อมูลโครงการ</h3><div class="g"><label>ชื่อโครงการ<input id="p1"></label><label>สถานที่<input id="p2"></label><label>ชื่อผู้ออกแบบ<input id="p3"></label><label>เลขที่ใบอนุญาต<input id="p4"></label><label>ชื่อชิ้นงาน (เช่น B1, C3, F2)<input id="p5"></label></div>
+<h3>วัสดุ</h3><div class="g"><label>f′c (ksc)<select id="f_fc"><option>240</option><option selected>280</option><option>320</option></select></label><label>เหล็กเสริม (มอก.20/24-2559)<select id="f_g"><option>SD30</option><option selected>SD40</option><option>SD50</option></select></label></div>
+<h3>หน้าตัด / น้ำหนัก / เหล็กเสริม</h3><div class="g" id="fl"></div>
+<button class="go" onclick="run()">คำนวณ</button></section>
+<section id="out" class="card"><p style="color:var(--m)">เลือกชิ้นงาน ใส่ข้อมูล แล้วกด “คำนวณ”</p></section></main>
+<script>
+const $=s=>document.querySelector(s),n2=(x,d=2)=>(+x).toFixed(d),sq=Math.sqrt;
+const BAR={RB6:.283,RB9:.636,RB12:1.131,RB15:1.767,RB19:2.835,DB10:.785,DB12:1.131,DB16:2.011,DB20:3.142,DB25:4.909,DB28:6.158,DB32:8.042},DM={RB6:.6,RB9:.9,RB12:1.2,RB15:1.5,RB19:1.9,DB10:1,DB12:1.2,DB16:1.6,DB20:2,DB25:2.5,DB28:2.8,DB32:3.2};
+const BAR0={...BAR},MB=['RB6','RB9','RB12','RB15','RB19','DB12','DB16','DB20','DB25','DB28','DB32'],SB=['RB6','RB9','RB12','RB15','RB19','DB10','DB12'],SL=['RB9','RB12','RB15','RB19','DB10','DB12','DB16','DB20'],G={SD30:3000,SD40:4000,SD50:5000};
+const b1=f=>f<=280?.85:Math.max(.65,.85-.05*(f-280)/70),phiF=e=>Math.min(.9,Math.max(.65,.65+(e-.002)*250/3));
+const ck=(R,n,dem,cap,u,sg,ok=dem<=cap+1e-9)=>{R.ck.push({n,dem,cap,u,ok});if(!ok&&sg)R.sg.push(n+': '+sg)};
+function flex(As,Ac,b,d,dp,fc,fy,bf,hf){const B1=b1(fc);
+ const f=Ac=>{let w=bf>b?bf:b,a=(As-Ac)*fy/(.85*fc*w),Mn;
+  if(bf>b&&a>hf){const Af=.85*fc*(bf-b)*hf/fy;a=(As-Af-Ac)*fy/(.85*fc*b);Mn=Af*fy*(d-hf/2)+(As-Af-Ac)*fy*(d-a/2)+Ac*fy*(d-dp)}
+  else Mn=(As-Ac)*fy*(d-a/2)+Ac*fy*(d-dp);return{a,Mn}};
+ let r=f(Ac),c=r.a/B1;if(Ac>0&&c<dp*6120/(6120-fy)){r=f(0);c=r.a/B1}
+ const et=.003*(d-c)/c,ph=phiF(et);return{a:r.a,c,et,ph,M:ph*r.Mn/1e5}}
+function diag(t,L,w,N=40){const x=[],V=[],M=[];for(let i=0;i<=N;i++){const xx=L*i/N*(t=='k'?2:1);x.push(+xx.toFixed(2));let v,m;
+ if(t=='s'){v=w*L/2-w*xx;m=w*L*xx/2-w*xx*xx/2}else if(t=='c'){v=w*(L-xx);m=-w*(L-xx)**2/2}
+ else{const y=xx<=L?xx:2*L-xx,sg=xx<=L?1:-1;v=sg*(3*w*L/8-w*y);m=3*w*L*y/8-w*y*y/2}V.push(+v.toFixed(3));M.push(+m.toFixed(3))}return{x,V,M}}
+const dch=(R,D,u,k=1)=>{R.ch.push({t:'แผนภาพแรงเฉือน/ปฏิกิริยา (SFD)',x:D.x,s:[{l:'V ('+u[0]+')',d:D.V.map(a=>a/k)}],xl:'x (m)',yl:'V'});R.ch.push({t:'แผนภาพโมเมนต์ (BMD)',x:D.x,s:[{l:'M ('+u[1]+')',d:D.M.map(a=>a/k),c:'#dc2626'}],xl:'x (m)',yl:'M',rev:1})};
+/* ---------- BEAM ---------- */
+function beam(v,sb,R){const{fc,fy,b,h,bf,hf,L,wD,wL,cov,nT,dT,nB,dB,ds,sp}=v,fyt=ds[0]=='R'?2400:fy,T=sb==3,C=sb==1,K=sb==2,sd=DM[ds];
+ const sw=2400*b*h/1e4,wu=1.4*(wD+sw)+1.7*wL;
+ R.st.push(`น้ำหนักประลัย (ACI 318 §5.3.1): w<sub>u</sub> = 1.4(w<sub>D</sub>+SW)+1.7w<sub>L</sub> = 1.4(${n2(wD)}+${n2(sw)})+1.7(${n2(wL)}) = <b>${n2(wu)}</b> kg/m`);
+ const Lt=K?2*L:L,ld=[[v.P1D,v.P1L,v.a1],[v.P2D,v.P2L,v.a2]].map(q=>({P:1.4*q[0]+1.7*q[1],a:Math.min(Lt,Math.max(0,q[2]))})).filter(q=>q.P>0),D=an(C?'c':K?'k':'s',L,wu,ld);
+ ld.forEach((q,i)=>R.st.push(`น้ำหนักบรรทุกแบบจุด: P<sub>u${i+1}</sub>=1.4P<sub>D</sub>+1.7P<sub>L</sub>=<b>${n2(q.P)}</b> kg ที่ x=${n2(q.a)} m จากปลายซ้าย`));
+ if(K&&ld.length)R.st.push(`คานต่อเนื่อง 2 ช่วงเท่ากัน: ใช้สมการสามโมเมนต์ (Clapeyron) M<sub>B</sub>=${n2(D.MB/1000)} t·m แล้ว superposition`);
+ const Mp=Math.max(0,...D.M)/1000,Mn_=Math.max(0,-Math.min(...D.M))/1000,Vu=Math.max(...D.V.map(Math.abs))/1000;
+ R.st.push(`โมเมนต์ประลัย: M<sub>u</sub>(+) = <b>${n2(Mp)}</b> t·m, M<sub>u</sub>(−) = <b>${n2(Mn_)}</b> t·m, V<sub>u</sub> = <b>${n2(Vu)}</b> t (สมการสถิตยศาสตร์)`);
+ const dt=cov+sd+DM[dT]/2,dbm=cov+sd+DM[dB]/2,AsT0=nT*BAR[dT],AsB0=nB*BAR[dB],AsXT=(v.xT||0)*BAR[v.dXT],AsXB=(v.xB||0)*BAR[v.dXB],AsT=AsT0+AsXT,AsB=AsB0+AsXB,P=flex(AsB,AsT0,b,h-dbm,dt,fc,fy,T?bf:0,T?hf:0),N=flex(AsT,AsB0,b,h-dt,dbm,fc,fy,0,0),N0=flex(AsT0,AsB0,b,h-dt,dbm,fc,fy,0,0);
+ const mn=(A,d)=>Math.max(.8*sq(fc)/fy,14/fy)*b*d;
+ if(!C){R.st.push(`ส่วนโมเมนต์บวก: A<sub>s</sub>=${n2(AsB)} cm², d=${n2(h-dbm)} cm, a=${n2(P.a)} cm${T&&P.a>hf?' (T-section)':''}, ε<sub>t</sub>=${n2(P.et,4)}, φ=${n2(P.ph)}, φM<sub>n</sub>=<b>${n2(P.M)}</b> t·m (ACI §22.2)`);
+  ck(R,'φMn(+) ≥ Mu(+)',Mp,P.M,'t·m','เพิ่มเหล็กล่าง/ความลึก');ck(R,'As,min ล่าง = max(0.8√fc′,14)/fy·bd',mn(AsB,h-dbm),AsB,'cm²','เพิ่มเหล็กล่าง');ck(R,'ε_t ≥ 0.004 (ล่าง)',.004,P.et,'','ลดเหล็กล่าง หรือเพิ่มหน้าตัด')}
+ if(C||K){R.st.push(`ส่วนโมเมนต์ลบ: A<sub>s</sub>=${n2(AsT)} cm², d=${n2(h-dt)} cm, a=${n2(N.a)} cm, ε<sub>t</sub>=${n2(N.et,4)}, φM<sub>n</sub>=<b>${n2(N.M)}</b> t·m`);
+  ck(R,'φMn(−) ≥ Mu(−)',Mn_,N.M,'t·m','เพิ่มเหล็กบน/ความลึก');ck(R,'As,min บน',mn(AsT,h-dt),AsT,'cm²','เพิ่มเหล็กบน');ck(R,'ε_t ≥ 0.004 (บน)',.004,N.et,'','ลดเหล็กบน หรือเพิ่มหน้าตัด')}
+ const spe=v.sp2>0?Math.min(sp,v.sp2):sp,d=h-Math.min(dt,dbm),Vc=.53*sq(fc)*b*d/1000,Av=2*BAR0[ds],Vs=Av*fyt*d/spe/1000,pV=.75*(Vc+Vs),Vud=Vu-wu*d/100/1000;
+ R.st.push(`แรงเฉือน (ACI §22.5): V<sub>c</sub>=0.53√f′c·b·d=${n2(Vc)} t, V<sub>s</sub>=A<sub>v</sub>f<sub>yt</sub>d/s=${n2(Vs)} t, φV<sub>n</sub>=0.75(V<sub>c</sub>+V<sub>s</sub>)=<b>${n2(pV)}</b> t, V<sub>u</sub> ที่ d = ${n2(Vud)} t`);
+ ck(R,'φVn ≥ Vu',Vud,pV,'t','ลดระยะปลอก/ใช้ปลอกใหญ่ขึ้น');ck(R,'Vs ≤ 2.1√fc′·bd',Vs,2.1*sq(fc)*b*d/1000,'t','เพิ่มหน้าตัด');
+ ck(R,'ระยะปลอก ≤ min(d/2,60)',sp,Math.min(d/2,60),'cm','ลดระยะปลอก');ck(R,'Av,min = max(0.2√fc′,3.5)·b·s/fyt',Math.max(.2*sq(fc),3.5)*b*sp/fyt,Av,'cm²','ลดระยะปลอก');
+ if(v.xT>0||v.xB>0||v.xS>0||v.sp2>0)R.st.push(`<b>เหล็กเสริมพิเศษ:</b> บนที่จุดรองรับ ${v.xT||0}-${v.dXT} (A<sub>s</sub>เพิ่ม ${n2(AsXT)} cm²), ล่างกลางช่วง ${v.xB||0}-${v.dXB} (${n2(AsXB)} cm²), เหล็กข้าง ${v.xS||0}-${v.dXS} ต่อด้าน, ปลอกถี่ปลายคาน ${v.sp2>0?'@'+v.sp2+' cm ยาว '+v.l2+' m':'ไม่ใช้'}`);
+ if((C||K)&&Mn_>N0.M+1e-9&&v.xT>0){const ix=C?i=>i:i=>100-i;let dist=0;for(let i=0;i<=100;i++){const j=ix(i);if(-D.M[j]/1000<=N0.M){dist=Math.abs(D.x[j]-D.x[ix(0)]);break}}const Lr=dist+Math.max((h-dt)/100,12*DM[v.dXT]/100);
+  R.st.push(`ระยะตัดเหล็กพิเศษบน: φM<sub>n</sub>(เหล็กบนเดิม)=${n2(N0.M)} t·m < M<sub>u</sub>(−)=${n2(Mn_)} t·m → จุดที่ไม่ต้องใช้เหล็กพิเศษอยู่ห่างผิวรองรับ ${n2(dist)} m + max(d,12d<sub>b</sub>) → ต้องยื่น ≥ <b>${n2(Lr)}</b> m (ACI §9.7.3.8)`);ck(R,'ความยาวเหล็กพิเศษบน ≥ ระยะที่ต้องการ',Lr,v.lXT,'m','เพิ่มความยาวเหล็กพิเศษบน')}
+ const clr=(n,dia)=>n>1?(b-2*(cov+sd)-n*dia)/(n-1):99,dgB=Math.max(DM[dB],v.xB>0?DM[v.dXB]:0),dgT=Math.max(DM[dT],v.xT>0?DM[v.dXT]:0);
+ ck(R,'ระยะสุทธิเหล็กล่าง ≥ max(2.5,d_b) (ชั้นเดียว)',Math.max(2.5,dgB),clr(nB+(v.xB||0),dgB),'cm','ใช้เหล็ก 2 ชั้นหรือขยายความกว้างคาน');ck(R,'ระยะสุทธิเหล็กบน ≥ max(2.5,d_b) (ชั้นเดียว)',Math.max(2.5,dgT),clr(nT+(v.xT||0),dgT),'cm','ใช้เหล็ก 2 ชั้นหรือขยายความกว้างคาน');
+ if(h>90||v.xS>0){const smx=Math.min((h-Math.min(dt,dbm))/6,30),nreq=h>90?Math.ceil(h/2/smx):0;R.st.push(`เหล็กเสริมข้าง (ACI §9.7.2.3, h>90 cm): s<sub>max</sub>=min(d/6,30)=${n2(smx,1)} cm → ต้องใช้ ≥ ${nreq} เส้น/ด้าน ในช่วง h/2 ใกล้ผิวดึง; ใช้จริง ${v.xS||0} เส้น/ด้าน`);ck(R,'เหล็กเสริมข้าง (จำนวนต่อด้าน)',nreq,v.xS||0,'เส้น','เพิ่มเหล็กเสริมข้าง')}
+ if(v.sp2>0&&v.l2>0){const j=Math.min(D.V.length-1,Math.round(v.l2/L*100)),Vm=Math.abs(D.V[j])/1000,Vsm=Av*fyt*d/sp/1000,pm=.75*(Vc+Vsm);R.st.push(`ปลอกถี่ปลายคาน: @${v.sp2} cm ยาว ${v.l2} m จากผิวรองรับ; กลางช่วง @${sp} cm → φV<sub>n</sub>(กลางช่วง)=${n2(pm)} t เทียบ V<sub>u</sub> ที่ปลายโซน=${n2(Vm)} t`);ck(R,'φVn(ปลอกกลางช่วง) ≥ Vu ที่ปลายโซนปลอกถี่',Vm,pm,'t','เพิ่มความยาวโซนปลอกถี่หรือลดระยะปลอกกลางช่วง')}
+ const hm=L*100/(C?8:K?18.5:16)*(.4+fy/7000);R.st.push(`ความหนาขั้นต่ำควบคุมการแอ่นตัว (ACI Table 9.3.1.1): h<sub>min</sub>=${n2(hm,1)} cm`);ck(R,'h ≥ h_min (Deflection)',hm,h,'cm','เพิ่มความลึกคาน');
+ dch(R,D,['t','t·m'],1000)}
+/* วิเคราะห์คาน: น้ำหนักแผ่สม่ำเสมอ w + น้ำหนักจุด (หน่วย kg, m) */
+function an(t,L,w,ld){const N=100,K=t=='k',x=[],V=[],M=[],sm=(a,b)=>a.reduce((s,l)=>s+b(l),0),
+ ss=(Lc,ls,y)=>{const RA=w*Lc/2+sm(ls,l=>l.P*(Lc-l.a)/Lc);return[RA-w*y-sm(ls,l=>l.a<=y?l.P:0),RA*y-w*y*y/2-sm(ls,l=>y>l.a?l.P*(y-l.a):0)]};
+ const l1=ld.filter(l=>l.a<=L),l2=ld.filter(l=>l.a>L).map(l=>({P:l.P,a:l.a-L}));let MB=0;
+ if(K)MB=-(sm(l1,l=>l.P*l.a*(L*L-l.a*l.a)/L)+sm(l2,l=>l.P*(L-l.a)*(L*L-(L-l.a)**2)/L)+w*L**3/2)/(4*L);
+ for(let i=0;i<=N*(K?2:1);i++){const X=L*i/N;x.push(+X.toFixed(2));let v,m;
+  if(t=='c'){v=w*(L-X)+sm(ld,l=>l.a>X?l.P:0);m=-(w*(L-X)**2/2+sm(ld,l=>l.a>X?l.P*(l.a-X):0))}
+  else if(!K)[v,m]=ss(L,l1,X);
+  else if(X<=L){[v,m]=ss(L,l1,X);v+=MB/L;m+=MB*X/L}
+  else{const y=X-L;[v,m]=ss(L,l2,y);v-=MB/L;m+=MB*(1-y/L)}
+  V.push(+v.toFixed(2));M.push(+m.toFixed(2))}return{x,V,M,MB}}
+/* ---------- COLUMN ---------- */
+function col(v,sb,R){const circ=sb>=2,slen=sb%2==1,{fc,fy,cov,dm,ds,sp,PD,PL,MD,ML,Lu,k}=v,fyt=ds[0]=='R'?2400:fy,sd=DM[ds],db=DM[dm],ab=BAR[dm],spir=v.tp=='Spiral';
+ let H,Wd,Ag,bars=[],Ig,r;
+ if(!circ){const{b,h,nx,ny}=v,y1=cov+sd+db/2;Wd=b;H=h;Ag=b*h;for(let i=0;i<nx;i++)bars.push(y1,h-y1);for(let j=1;j<=ny;j++){const y=y1+(h-2*y1)*j/(ny+1);bars.push(y,y)}Ig=b*h**3/12;r=.3*h}
+ else{const D=v.D,n=v.nc,rr=D/2-cov-sd-db/2;H=D;Wd=D;Ag=Math.PI*D*D/4;for(let i=0;i<n;i++)bars.push(D/2-rr*Math.cos(2*Math.PI*i/n));Ig=Math.PI*D**4/64;r=.25*D}
+ const Ast=bars.length*ab,rho=Ast/Ag,B1=b1(fc),P0=.85*fc*(Ag-Ast)+fy*Ast,Pm=(spir?.85*.75:.8*.65)*P0/1e3,dtm=Math.max(...bars),pts=[{x:0,y:Pm}];
+ for(let i=0;i<=80;i++){const c=H*(2.2-2.15*i/80),a=Math.min(B1*c,H);let Ac,yc;
+  if(!circ){Ac=a*Wd;yc=a/2}else{const rd=H/2,th=Math.acos((rd-a)/rd),A=th-Math.sin(th)*Math.cos(th);Ac=rd*rd*A;yc=rd-2*rd*Math.sin(th)**3/(3*A)}
+  let Pn=.85*fc*Ac,Mn=Pn*(H/2-yc);for(const y of bars){const es=.003*(c-y)/c,fs=Math.max(-fy,Math.min(fy,es*2.04e6)),F=ab*(fs-(y<a?.85*fc:0));Pn+=F;Mn+=F*(H/2-y)}
+  const et=.003*(dtm-c)/c,ph=spir?Math.min(.9,Math.max(.75,.75+(et-.002)*50/3)):phiF(et);pts.push({x:ph*Mn/1e5,y:Math.min(Pm,ph*Pn/1e3)})}
+ pts.push({x:0,y:-.9*fy*Ast/1e3});
+ const Pu=1.4*PD+1.7*PL,M0=1.4*MD+1.7*ML,Mmin=Pu*(1.5+.03*H)/100,M1=Math.max(M0,Mmin),lam=k*Lu*100/r;
+ R.st.push(`น้ำหนักประลัย: P<sub>u</sub>=1.4D+1.7L=<b>${n2(Pu)}</b> t, M<sub>u</sub>=<b>${n2(M0)}</b> t·m, M<sub>min</sub>=P<sub>u</sub>(1.5+0.03h)=${n2(Mmin)} t·m (ACI §6.6.4.5.4)`);
+ R.st.push(`A<sub>g</sub>=${n2(Ag,0)} cm², A<sub>st</sub>=${bars.length}×${n2(ab,3)}=${n2(Ast)} cm², ρ=${n2(rho*100)}%, φP<sub>n,max</sub>=${spir?'0.85×0.75':'0.80×0.65'}[0.85f′c(A<sub>g</sub>−A<sub>st</sub>)+f<sub>y</sub>A<sub>st</sub>]=<b>${n2(Pm)}</b> t`);
+ R.st.push(`ความชะลูด: kL<sub>u</sub>/r = ${n2(k)}×${n2(Lu*100,0)}/${n2(r)} = <b>${n2(lam)}</b> (เสาสั้นเมื่อ &lt; 22)`);
+ let Mu=M1;if(slen){const Ec=15100*sq(fc),bd=1.4*PD/Pu,EI=.4*Ec*Ig/(1+bd),Pc=Math.PI**2*EI/(k*Lu*100)**2/1e3,den=1-Pu/(.75*Pc);
+  R.st.push(`Moment magnification (ACI §6.6.4.5): EI=0.4E<sub>c</sub>I<sub>g</sub>/(1+β<sub>dns</sub>)=${n2(EI/1e9,1)}×10⁹ kg·cm², P<sub>c</sub>=π²EI/(kL<sub>u</sub>)²=${n2(Pc)} t, δ<sub>ns</sub>=C<sub>m</sub>/(1−P<sub>u</sub>/0.75P<sub>c</sub>)=${den>0?n2(Math.max(1,1/den)):'ไม่เสถียร'}`);
+  Mu=den>0?M1*Math.max(1,1/den):1e9;ck(R,'เสาไม่เสียเสถียรภาพ (Pu<0.75Pc)',Pu,.75*Pc,'t','เพิ่มขนาดหน้าตัดเสา')}
+ else if(lam>=22)R.st.push('<b>คำเตือน:</b> λ ≥ 22 ควรตรวจสอบเป็นเสาชะลูด');
+ let cap=0;if(Pu<=pts[0].y){for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];if(a.y>=Pu&&b.y<Pu){cap=a.x+(b.x-a.x)*(a.y-Pu)/(a.y-b.y);break}}}
+ R.st.push(`ตรวจสอบ Interaction (strain compatibility, ε<sub>cu</sub>=0.003, E<sub>s</sub>=2.04×10⁶ ksc): ที่ P<sub>u</sub>=${n2(Pu)} t → φM<sub>n</sub>=<b>${n2(cap)}</b> t·m เทียบกับ M<sub>u,design</sub>=<b>${n2(Mu)}</b> t·m`);
+ ck(R,'Pu ≤ φPn,max',Pu,Pm,'t','เพิ่มหน้าตัด/เหล็กเสริม');ck(R,'φMn(Pu) ≥ Mu',Mu,cap,'t·m','เพิ่มเหล็กเสริมหรือขยายหน้าตัด');ck(R,'ρ ≥ 1%',.01,rho,'','เพิ่มเหล็กเสริม');ck(R,'ρ ≤ 8%',rho,.08,'','ลดเหล็กเสริม/ขยายหน้าตัด');
+ ck(R,'จำนวนเหล็กแกน ≥ '+(circ?6:4),circ?6:4,bars.length,'เส้น','เพิ่มจำนวนเหล็กแกน');
+ const lim=Math.min(16*db,48*sd,circ?H:Math.min(v.b,v.h));ck(R,'ระยะปลอก ≤ min(16db,48dt,ด้านเล็ก)',sp,lim,'cm','ลดระยะปลอก');ck(R,'λ ≤ 100',lam,100,'','เพิ่มหน้าตัดเสา');
+ R.ch.push({t:'Interaction Diagram (φPn–φMn)',xy:1,s:[{l:'φPn–φMn',d:pts},{l:'(Mu,Pu)',d:[{x:Mu,y:Pu}],pr:7,line:false,c:'#dc2626'}],xl:'φMn (t·m)',yl:'φPn (t)'})}
+/* ---------- SLAB ---------- */
+function slab(v,sb,R){const{fc,fy,h,cov,db,sp,SDL,LL}=v,d=h-cov-DM[db]/2,As=BAR[db]*100/sp,sw=2400*h/100*(sb==4&&v.pc=='Hollow core'?.6:1),wu=1.4*(sw+SDL)+1.7*LL;
+ R.st.push(`w<sub>u</sub>=1.4(${n2(sw)}+${n2(SDL)})+1.7(${n2(LL)})=<b>${n2(wu)}</b> kg/m² (แถบกว้าง 1 m)`);
+ const f=flex(As,0,100,d,0,fc,fy,0,0),rt=fy<4000?.002:.0018;
+ R.st.push(`A<sub>s</sub>=${n2(As)} cm²/m, d=${n2(d)} cm, a=${n2(f.a)} cm, ε<sub>t</sub>=${n2(f.et,4)}, φ=${n2(f.ph)}, φM<sub>n</sub>=<b>${n2(f.M)}</b> t·m/m`);
+ ck(R,'As ≥ ρ_min·b·h',rt*100*h,As,'cm²/m','เพิ่มเหล็ก/ลดระยะเรียง');ck(R,'ระยะเรียง ≤ min(2h,45)',sp,Math.min(2*h,45),'cm','ลดระยะเรียง');ck(R,'ε_t ≥ 0.004',.004,f.et,'','ลดเหล็กหรือเพิ่มความหนา');
+ const hm=.4+fy/7000;let D;
+ if(sb==3){const{L1,L2,c}=v,Ln=L1-c/100,Mo=wu*L2*Ln*Ln/8/1000,Mu=.65*.75*Mo,bc=L2*50,fl=flex(BAR[db]*bc/sp,0,bc,d,0,fc,fy,0,0),b0=4*(c+d),Vu=wu*(L1*L2-(c+d)**2/1e4)/1000,pV=.75*1.06*sq(fc)*b0*d/1000,hmin=Ln*100/30*(.8+fy/14000)/1.1;
+  R.st.push(`Direct Design: M<sub>o</sub>=w<sub>u</sub>L<sub>2</sub>L<sub>n</sub>²/8=${n2(Mo)} t·m, M<sub>u</sub>(−,แถบเสา)=0.65×0.75M<sub>o</sub>=<b>${n2(Mu)}</b> t·m, φM<sub>n</sub> (แถบเสา)=${n2(fl.M)} t·m`);
+  R.st.push(`Punching (ACI §22.6): b<sub>o</sub>=4(c+d)=${n2(b0,1)} cm, V<sub>u</sub>=${n2(Vu)} t, φV<sub>c</sub>=0.75×1.06√f′c·b<sub>o</sub>d=<b>${n2(pV)}</b> t`);
+  ck(R,'φMn ≥ Mu (แถบเสา)',Mu,fl.M,'t·m','เพิ่มเหล็กเสริม');ck(R,'Punching φVc ≥ Vu',Vu,pV,'t','เพิ่มความหนา/ใส่ drop panel/หัวเสา');ck(R,'h ≥ h_min',hmin,h,'cm','เพิ่มความหนาพื้น');D=diag('s',L1,wu*L2)}
+ else if(sb==2){const{Lx,Ly}=v,ws=wu*Ly**4/(Lx**4+Ly**4),wy=wu-ws,Mx=ws*Lx*Lx/8/1000,My=wy*Ly*Ly/8/1000,fy2=flex(As,0,100,d-DM[db],0,fc,fy,0,0),Vu=ws*Lx/2/1000,Vc=.75*.53*sq(fc)*100*d/1000,be=Ly/Lx,hmin=Ly*100*(.8+fy/14000)/(36+9*be);
+  R.st.push(`Grashof/Marcus (ขอบรองรับอิสระ): w<sub>x</sub>=w<sub>u</sub>L<sub>y</sub>⁴/(L<sub>x</sub>⁴+L<sub>y</sub>⁴)=${n2(ws)} kg/m², M<sub>x</sub>=<b>${n2(Mx)}</b>, M<sub>y</sub>=<b>${n2(My)}</b> t·m/m`);
+  ck(R,'φMn ≥ Mx (ทางสั้น)',Mx,f.M,'t·m/m','เพิ่มเหล็กทางสั้น');ck(R,'φMn ≥ My (ทางยาว)',My,fy2.M,'t·m/m','เพิ่มเหล็กทางยาว');ck(R,'φVc ≥ Vu',Vu,Vc,'t/m','เพิ่มความหนา');ck(R,'h ≥ h_min',hmin,h,'cm','เพิ่มความหนา');D=diag('s',Lx,ws)}
+ else{const L=v.L,C=sb==1,M=(C?wu*L*L/2:wu*L*L/8)/1000,Vu=(C?wu*L:wu*L/2)/1000,Vc=.75*.53*sq(fc)*100*d/1000,hmin=L*100/(C?10:20)*hm;
+  R.st.push(`M<sub>u</sub>=${C?'w<sub>u</sub>L²/2':'w<sub>u</sub>L²/8'}=<b>${n2(M)}</b> t·m/m, V<sub>u</sub>=${n2(Vu)} t/m, φV<sub>c</sub>=${n2(Vc)} t/m, h<sub>min</sub>=${n2(hmin,1)} cm`);
+  if(sb==4)R.st.push('หมายเหตุ: พื้นสำเร็จรูปคำนวณเป็นหน้าตัดตันเทียบเท่า — ต้องยืนยันกับตารางของผู้ผลิต');
+  ck(R,'φMn ≥ Mu',M,f.M,'t·m/m','เพิ่มเหล็ก/ความหนา');ck(R,'φVc ≥ Vu',Vu,Vc,'t/m','เพิ่มความหนา');ck(R,'h ≥ h_min (Deflection)',hmin,h,'cm','เพิ่มความหนา');D=diag(C?'c':'s',L,wu)}
+ dch(R,D,['t/m','t·m/m'],1000)}
+/* ---------- FOOTING ---------- */
+function foot(v,sb,R){const{fc,fy,B,L,h,cov,db,sp,c1,c2,qa,PD1,PL1,PD2,PL2,s,e1}=v,d=h-cov-DM[db]*1.5;
+ const C=sb==1?[[e1,PD1,PL1],[e1+s,PD2,PL2]]:sb==2?[[c1/200,PD1,PL1]]:[[L/2,PD1,PL1]],Ps=C.reduce((a,c)=>a+c[1]+c[2],0),Pu=C.map(c=>1.4*c[1]+1.7*c[2]),Pt=Pu.reduce((a,b)=>a+b,0),A=B*L;
+ const xr=C.reduce((a,c)=>a+(c[1]+c[2])*c[0],0)/Ps,e=xr-L/2,qx=Ps/A*(1+6*Math.abs(e)/L),qn=Ps/A*(1-6*Math.abs(e)/L);
+ R.st.push(`แรงดันดินใช้งาน: ΣP=${n2(Ps)} t, e=${n2(e,3)} m, q<sub>max,min</sub>=P/A(1±6e/L)=<b>${n2(qx)}</b> / ${n2(qn)} t/m² (q<sub>a</sub>=${qa})`);
+ ck(R,'q_max ≤ q_a',qx,qa,'t/m²','ขยายฐานราก');ck(R,'ไม่เกิดแรงยก (q_min ≥ 0)',0,qn,'t/m²','ขยายฐานราก/ปรับตำแหน่งเสา');
+ const xu=C.reduce((a,c,i)=>a+Pu[i]*c[0],0)/Pt,eu=xu-L/2,q=x=>Pt/A*(1+12*eu*(x-L/2)/(L*L)),N=100,xs=[],V=[0],M=[0],dx=L/N;xs.push(0);
+ for(let i=1;i<=N;i++){xs.push(L*i/N);let vv=V[i-1]+q((xs[i-1]+xs[i])/2)*B*dx;C.forEach((c,j)=>{if(c[0]>xs[i-1]&&c[0]<=xs[i])vv-=Pu[j]});V.push(vv);M.push(M[i-1]+(V[i-1]+vv)/2*dx)}
+ const Mb=Math.max(...M),Mt=-Math.min(...M),As=BAR[db]*B*100/sp,fl=flex(As,0,B*100,d,0,fc,fy,0,0);
+ R.st.push(`น้ำหนักประลัย ΣP<sub>u</sub>=${n2(Pt)} t (1.4D+1.7L), q<sub>u</sub> แปรผันเชิงเส้น; วิเคราะห์แถบฐานรากด้วยการอินทิเกรตเชิงตัวเลข: M<sub>u</sub>(ล่าง)=<b>${n2(Mb)}</b>, M<sub>u</sub>(บน)=${n2(Mt)} t·m`);
+ R.st.push(`A<sub>s</sub>=${n2(As)} cm², d=${n2(d)} cm, ε<sub>t</sub>=${n2(fl.et,4)}, φM<sub>n</sub>=<b>${n2(fl.M)}</b> t·m`);
+ ck(R,'φMn ≥ Mu (ล่าง)',Mb,fl.M,'t·m','เพิ่มเหล็ก/ความหนา');if(Mt>.01)ck(R,'φMn ≥ Mu (บน, เหล็กบน=ล่าง)',Mt,fl.M,'t·m','เพิ่มเหล็กบน');
+ ck(R,'As ≥ 0.0018·B·h',.0018*B*100*h,As,'cm²','เพิ่มเหล็ก');ck(R,'ε_t ≥ 0.004',.004,fl.et,'','ลดเหล็กหรือเพิ่มความหนา');
+ const Vat=x=>V[Math.max(0,Math.min(N,Math.round(x/L*N)))];let Vu=0;C.forEach(c=>[-1,1].forEach(sg=>{const xx=c[0]+sg*(c1/200+d/100);if(xx>0&&xx<L)Vu=Math.max(Vu,Math.abs(Vat(xx)))}));
+ const pV=.75*.53*sq(fc)*B*100*d/1000;R.st.push(`แรงเฉือนทางเดียว ที่ระยะ d จากผิวเสา: V<sub>u</sub>=${n2(Vu)} t, φV<sub>c</sub>=0.75×0.53√f′c·B·d=<b>${n2(pV)}</b> t`);ck(R,'φVc ≥ Vu (One-way)',Vu,pV,'t','เพิ่มความหนา');
+ C.forEach((c,j)=>{const edge=c[0]*100-c1/2<d/2,b0=edge?2*(c1+d/2)+(c2+d):2*(c1+d)+2*(c2+d),Ap=edge?(c1+d/2)*(c2+d):(c1+d)*(c2+d),vu=Pu[j]-q(c[0])*Ap/1e4,be=Math.max(c1,c2)/Math.min(c1,c2),vc=.75*Math.min(1.06,.53*(1+2/be))*sq(fc)*b0*d/1000;
+  R.st.push(`Punching เสา ${j+1} (${edge?'ชิดขอบ 3 ด้าน':'4 ด้าน'}): b<sub>o</sub>=${n2(b0,1)} cm, V<sub>u</sub>=${n2(vu)} t, φV<sub>c</sub>=0.75·min(1.06,0.53(1+2/β))√f′c·b<sub>o</sub>d=<b>${n2(vc)}</b> t`);ck(R,'Punching เสา '+(j+1),vu,vc,'t','เพิ่มความหนาฐานราก')});
+ const lb=xs.map(a=>a.toFixed(2));R.ch.push({t:'แรงดันดินประลัย q_u',x:lb,s:[{l:'q_u (t/m²)',d:xs.map(q),c:'#16a34a'}],xl:'x (m)',yl:'q_u'});R.ch.push({t:'แรงเฉือน V(x)',x:lb,s:[{l:'V (t)',d:V}],xl:'x (m)',yl:'V'});R.ch.push({t:'โมเมนต์ M(x) (บวก = ใต้ท้องฐานดึง)',x:lb,s:[{l:'M (t·m)',d:M,c:'#dc2626'}],xl:'x (m)',yl:'M'})}
+/* ---------- PILE CAP ---------- */
+function pile(v,sb,R){const n=sb+1,{fc,fy,dp,s,B,L,h,cov,db,nb,c1,c2,PD,PL,Mx,Ra}=v,d=h-cov-DM[db]*1.5,Pu=1.4*PD+1.7*PL,Mu=Mx*Pu/(PD+PL);
+ const k=.7071,pts={1:[[0,0]],2:[[-s/2,0],[s/2,0]],3:[[-s/2,-s*.2887],[s/2,-s*.2887],[0,s*.5774]],4:[[-s/2,-s/2],[s/2,-s/2],[-s/2,s/2],[s/2,s/2]],5:[[-s*k,-s*k],[s*k,-s*k],[-s*k,s*k],[s*k,s*k],[0,0]]}[n],sxx=pts.reduce((a,p)=>a+p[0]**2,0),R_=pts.map(p=>Pu/n+(sxx?Mu*100*p[0]/sxx:0)),Ru=Ra*Pu/(PD+PL);
+ R.st.push(`P<sub>u</sub>=1.4D+1.7L=<b>${n2(Pu)}</b> t, M<sub>u</sub>=${n2(Mu)} t·m; แรงเข็ม R<sub>i</sub>=P<sub>u</sub>/n ± M<sub>u</sub>x<sub>i</sub>/Σx² → max=<b>${n2(Math.max(...R_))}</b> t, min=${n2(Math.min(...R_))} t (ค่ารับได้ปรับตามแฟคเตอร์=${n2(Ru)} t)`);
+ ck(R,'R_max ≤ กำลังรับเข็ม (factored)',Math.max(...R_),Ru,'t','เพิ่มจำนวน/ขนาดเข็ม');ck(R,'เข็มไม่รับแรงดึง',0,Math.min(...R_),'t','ลดโมเมนต์/เพิ่มจำนวนเข็ม');ck(R,'ระยะเข็ม ≥ 3D',3*dp,n==1?3*dp:s,'cm','เพิ่มระยะเข็ม');
+ const mx=Math.max(...pts.map(p=>Math.abs(p[0]))),my=Math.max(...pts.map(p=>Math.abs(p[1])));ck(R,'ความกว้างฐาน B ≥ 2x+D+30',2*mx+dp+30,B,'cm','ขยายฐานรากด้านกว้าง');ck(R,'ความยาวฐาน L ≥ 2y+D+30',2*my+dp+30,L,'cm','ขยายฐานรากด้านยาว');
+ if(n>1){const mom=ax=>{let a=0,b=0;const c=ax?c2:c1;pts.forEach((p,i)=>{const q=ax?p[1]:p[0];if(q>c/2)a+=R_[i]*(q-c/2)/100;if(-q>c/2)b+=R_[i]*(-q-c/2)/100});return Math.max(a,b)},sh=ax=>{let a=0,b=0;const c=ax?c2:c1,g=z=>Math.max(0,Math.min(1,(z-(c/2+d)+dp/2)/dp));pts.forEach((p,i)=>{const q=ax?p[1]:p[0];a+=g(q)*R_[i];b+=g(-q)*R_[i]});return Math.max(a,b)};
+  [[0,L,'ทิศ x'],[1,B,'ทิศ y']].forEach(([ax,bw,nm])=>{const M1=mom(ax),f=flex(nb*BAR[db],0,bw,d-ax*DM[db],0,fc,fy,0,0),V1=sh(ax),pV=.75*.53*sq(fc)*bw*d/1000;
+   R.st.push(`${nm}: M<sub>u</sub>(ผิวเสา)=${n2(M1)} t·m vs φM<sub>n</sub>=${n2(f.M)} t·m (A<sub>s</sub>=${n2(nb*BAR[db])} cm², ε<sub>t</sub>=${n2(f.et,4)}); V<sub>u</sub>(ที่ d)=${n2(V1)} t vs φV<sub>c</sub>=${n2(pV)} t`);
+   if(M1>0){ck(R,'φMn ≥ Mu '+nm,M1,f.M,'t·m','เพิ่มเหล็ก/ความหนา');ck(R,'As ≥ 0.0018·b·h '+nm,.0018*bw*h,nb*BAR[db],'cm²','เพิ่มเหล็ก')}ck(R,'φVc ≥ Vu '+nm,V1,pV,'t','เพิ่มความหนา')})}
+ const b0=2*(c1+d)+2*(c2+d),ins=pts.reduce((a,p,i)=>a+(Math.abs(p[0])<c1/2+d/2&&Math.abs(p[1])<c2/2+d/2?R_[i]:0),0),vu=Pu-ins,pc=.75*1.06*sq(fc)*b0*d/1000;
+ R.st.push(`Punching เสา: b<sub>o</sub>=${n2(b0,1)} cm, V<sub>u</sub>=P<sub>u</sub>−ΣR<sub>ใน</sub>=${n2(vu)} t, φV<sub>c</sub>=<b>${n2(pc)}</b> t`);ck(R,'Punching φVc ≥ Vu',vu,pc,'t','เพิ่มความหนาฐานราก');
+ R.ch.push({t:'ปฏิกิริยาเสาเข็ม',bar:1,x:pts.map((_,i)=>'P'+(i+1)),s:[{l:'R_i (t)',d:R_.map(a=>+a.toFixed(2))},{l:'กำลังรับ (t)',d:pts.map(()=>+Ru.toFixed(2)),c:'#16a34a'}],xl:'เสาเข็ม',yl:'t'})}
+/* ---------- STAIR ---------- */
+function stair(v,sb,R){const{fc,fy,n,Rr,T,t,SDL,LL,cov,db,sp}=v,L=sb==2?v.Rm*v.th*Math.PI/180:n*T/100+(sb==1?v.LB:0),al=Math.atan(Rr/T),d=t-cov-DM[db]/2,wD=2400*(t/100/Math.cos(al)+Rr/200)+SDL,wu=1.4*wD+1.7*LL,kf=sb==2?1.25:1;
+ const M=kf*wu*L*L/8/1000,Vu=wu*L/2/1000*(sb==2?1.1:1),As=BAR[db]*100/sp,f=flex(As,0,100,d,0,fc,fy,0,0),Vc=.75*.53*sq(fc)*100*d/1000;
+ R.st.push(`L=${n2(L)} m, α=${n2(al*180/Math.PI,1)}°, w<sub>D</sub>=2400(t/cosα+R/2)+SDL=${n2(wD)} kg/m², w<sub>u</sub>=1.4D+1.7L=<b>${n2(wu)}</b> kg/m² (ต่อแนวราบ แถบกว้าง 1 m)`);
+ R.st.push(`M<sub>u</sub>=${kf>1?'1.25×':''}w<sub>u</sub>L²/8=<b>${n2(M)}</b> t·m/m, V<sub>u</sub>=${n2(Vu)} t/m; φM<sub>n</sub>=<b>${n2(f.M)}</b> t·m/m (A<sub>s</sub>=${n2(As)} cm²/m, ε<sub>t</sub>=${n2(f.et,4)}), φV<sub>c</sub>=${n2(Vc)} t/m`);
+ if(sb==1)R.st.push('บันไดพับผ้า: ใช้ช่วงรวมของชานพักเป็นช่วงเทียบเท่า ควรตรวจสอบจุดพับ (reentrant) เพิ่มเติม');if(sb==2)R.st.push('บันไดวน: ใช้ตัวคูณโมเมนต์ 1.25 และแรงเฉือน 1.10 เพื่อประมาณผลของแรงบิด — ควรวิเคราะห์ Helical ละเอียดเพิ่ม');
+ const rt=fy<4000?.002:.0018,hm=L*100/20*(.4+fy/7000);
+ ck(R,'φMn ≥ Mu',M,f.M,'t·m/m','เพิ่มเหล็ก/ความหนาแม่บันได');ck(R,'φVc ≥ Vu',Vu,Vc,'t/m','เพิ่มความหนา');ck(R,'As ≥ ρ_min·b·t',rt*100*t,As,'cm²/m','เพิ่มเหล็ก');ck(R,'ระยะเรียง ≤ min(3t,45)',sp,Math.min(3*t,45),'cm','ลดระยะเรียง');ck(R,'t ≥ L/20 (Deflection)',hm,t,'cm','เพิ่มความหนาแม่บันได');
+ const g=2*Rr+T;ck(R,'2R+T ≤ 64 cm (ความสบาย)',g,64,'cm','ปรับลูกตั้ง/ลูกนอน',g>=60&&g<=64);ck(R,'ε_t ≥ 0.004',.004,f.et,'','ลดเหล็กหรือเพิ่มความหนา');
+ dch(R,diag('s',L,wu),['t/m','t·m/m'],1000)}
+/* ---------- RETAINING WALL ---------- */
+function wall(v,sb,R){const{fc,fy,H,hf,B,Lt,tt,tb,gs,ph,q,pf,cf,Df,qa,Es,Sa,hk,cov,dS,sS,dT,sT,dH,sH,Lw,pc,ps,pfm,ppc,ptr,Lp,crane}=v,key=sb==1,gc=2.4,hm=hf/100,tbm=tb/100,ttm=tt/100,Lh=B-Lt-tbm,Ht=H+hm,rad=Math.PI/180,Ka=Math.tan((45-ph/2)*rad)**2,Kp=Math.tan((45+pf/2)*rad)**2,mu=Math.tan(2/3*pf*rad);
+ if(Lh<=0)throw new Error('B ต้องมากกว่า L_toe + t_b');
+ const I=(f,a,b,n=120)=>{let s=0,h=(b-a)/n;for(let i=0;i<n;i++)s+=f(a+h*(i+.5))*h;return s};
+ const Pa1=.5*Ka*gs*Ht*Ht,Pa2=Ka*q*Ht,Pa=Pa1+Pa2,Mo=Pa1*Ht/3+Pa2*Ht/2;
+ R.st.push(`<b>1) แรงดันดินด้านข้าง (Rankine):</b> K<sub>a</sub>=tan²(45°−φ/2)=tan²(${45-ph/2}°)=<b>${n2(Ka,3)}</b>; σ<sub>h</sub> ที่ฐาน=K<sub>a</sub>γH′+K<sub>a</sub>q=${n2(Ka*gs*Ht+Ka*q)} t/m² (H′=H+h<sub>f</sub>=${n2(Ht)} m)`);
+ R.st.push(`P<sub>a1</sub>=½K<sub>a</sub>γH′²=${n2(Pa1)} t/m (ที่ H′/3), P<sub>a2</sub>=K<sub>a</sub>qH′=${n2(Pa2)} t/m (ที่ H′/2), ΣP<sub>a</sub>=<b>${n2(Pa)}</b> t/m, M<sub>o</sub>=P<sub>a1</sub>H′/3+P<sub>a2</sub>H′/2=<b>${n2(Mo)}</b> t·m/m`);
+ const xs=Lt+tbm,Wt=[['W1 ก้าน (สี่เหลี่ยม)',ttm*H*gc,xs-ttm/2],['W2 ก้าน (สามเหลี่ยม)',.5*(tbm-ttm)*H*gc,Lt+2/3*(tbm-ttm)],['W3 ฐานราก',B*hm*gc,B/2],['W4 ดินบนส้น γHL<sub>h</sub>',Lh*H*gs,xs+Lh/2],['W5 น้ำหนักบรรทุกบนส้น qL<sub>h</sub>',q*Lh,xs+Lh/2]],SV=Wt.reduce((a,w)=>a+w[1],0),Mr=Wt.reduce((a,w)=>a+w[1]*w[2],0);
+ R.st.push(`<b>2) น้ำหนักและโมเมนต์ต้านรอบปลายเท้า (ต่อ 1 m, γ<sub>c</sub>=2.4):</b><table><tr><th>รายการ</th><th>W (t/m)</th><th>แขน x (m)</th><th>M (t·m/m)</th></tr>${Wt.map(w=>`<tr><td>${w[0]}</td><td>${n2(w[1])}</td><td>${n2(w[2])}</td><td>${n2(w[1]*w[2])}</td></tr>`).join('')}<tr><th>รวม</th><th>${n2(SV)}</th><th></th><th>${n2(Mr)}</th></tr></table>`);
+ const fot=ck;const FSo=Mr/Mo;R.st.push(`<b>3) การพลิกคว่ำ (Overturning):</b> FS<sub>ot</sub>=ΣM<sub>r</sub>/ΣM<sub>o</sub>=${n2(Mr)}/${n2(Mo)}=<b>${n2(FSo)}</b> (ต้อง ≥ 2.0)`);
+ const useP=key||v.pp=='คิด',Dp=Df+(key?hk:0),Pp=useP?.5*Kp*gs*Dp*Dp+2*cf*sq(Kp)*Dp:0,Rs=mu*SV+cf*B+Pp,FSs=Rs/Pa;
+ R.st.push(`<b>4) การเลื่อนไถล (Sliding):</b> K<sub>p</sub>=tan²(45°+φ<sub>f</sub>/2)=${n2(Kp,3)}, μ=tan(2φ<sub>f</sub>/3)=${n2(mu,3)}, P<sub>p</sub>=${useP?`½K<sub>p</sub>γD<sub>p</sub>²+2c√K<sub>p</sub>D<sub>p</sub> (D<sub>p</sub>=${n2(Dp)} m${key?' รวม shear key':''})`:'ไม่คิด'}=${n2(Pp)} t/m; FS<sub>sl</sub>=(μΣV+cB+P<sub>p</sub>)/ΣP<sub>a</sub>=(${n2(mu*SV)}+${n2(cf*B)}+${n2(Pp)})/${n2(Pa)}=<b>${n2(FSs)}</b> (ต้อง ≥ 1.5)`);
+ const xb=(Mr-Mo)/SV;if(xb<=0)throw new Error('กำแพงไม่เสถียร (ΣM_r ≤ ΣM_o) ขยายฐานหรือเพิ่มน้ำหนัก');
+ const e=B/2-xb,ok6=e<=B/6,Lcs=ok6?B:3*xb,qmx=ok6?SV/B*(1+6*e/B):2*SV/Lcs,qmn=ok6?SV/B*(1-6*e/B):0;
+ R.st.push(`<b>5) แรงแบกทานใต้ฐาน (Bearing):</b> x̄=(ΣM<sub>r</sub>−ΣM<sub>o</sub>)/ΣV=${n2(xb,3)} m, e=B/2−x̄=${n2(e,3)} m (B/6=${n2(B/6,3)}); q<sub>max,min</sub>=ΣV/B(1±6e/B)=<b>${n2(qmx)}</b> / ${n2(qmn)} t/m² (q<sub>a</sub>=${qa})`);
+ const pr=pf*rad,Nq=pf?Math.exp(Math.PI*Math.tan(pr))*Math.tan((45+pf/2)*rad)**2:1,Nc=pf?(Nq-1)/Math.tan(pr):5.14,Ng=pf?(Nq-1)*Math.tan(1.4*pr):0,Bp=B-2*Math.abs(e),qu=cf*Nc+gs*Df*Nq+.5*gs*Bp*Ng;
+ R.st.push(`กำลังแบกทานประลัย (Meyerhof, ไม่คิด inclination): N<sub>q</sub>=e<sup>π tanφ</sup>tan²(45+φ/2)=${n2(Nq)}, N<sub>c</sub>=(N<sub>q</sub>−1)cotφ=${n2(Nc)}, N<sub>γ</sub>=(N<sub>q</sub>−1)tan1.4φ=${n2(Ng)}; B′=B−2e=${n2(Bp)} m; q<sub>ult</sub>=cN<sub>c</sub>+γD<sub>f</sub>N<sub>q</sub>+½γB′N<sub>γ</sub>=${n2(qu)} t/m² → FS=q<sub>ult</sub>/q<sub>max</sub>=<b>${n2(qu/qmx)}</b> (ต้อง ≥ 3.0)`);
+ const Is=1.5,St=qmx*B*.91/Es*Is*100,Sh=qmn*B*.91/Es*Is*100,tilt=(St-Sh)/100/B;
+ R.st.push(`<b>6) การทรุดตัว (Elastic settlement):</b> S=q·B(1−ν²)I<sub>s</sub>/E<sub>s</sub> (ν=0.3, I<sub>s</sub>=1.5 ฐานแข็งแถบ ประมาณ): S<sub>toe</sub>=<b>${n2(St)}</b> cm, S<sub>heel</sub>=${n2(Sh)} cm, ความเอียง=(S<sub>toe</sub>−S<sub>heel</sub>)/B=1/${tilt>0?Math.round(1/tilt):'∞'}`);
+ ck(R,'FS พลิกคว่ำ ≥ 2.0',2,FSo,'','ขยายฐาน/เพิ่มส้นเท้า');ck(R,'FS เลื่อนไถล ≥ 1.5',1.5,FSs,'','เพิ่มความกว้างฐาน/ใส่ shear key/ขยายฐาน');ck(R,'e ≤ B/6 (ตกในแกนกลาง)',e,B/6,'m','ขยายฐาน/ปรับ toe');ck(R,'q_max ≤ q_a',qmx,qa,'t/m²','ขยายฐานหรือปรับปรุงดินฐานราก');ck(R,'FS กำลังแบกทาน ≥ 3',3,qu/qmx,'','ขยายฐาน/เพิ่ม D_f');ck(R,'การทรุดตัว ≤ ยอมให้',St,Sa,'cm','ขยายฐาน/ปรับปรุงดิน');ck(R,'ความเอียงฐาน ≤ 1/300',tilt,1/300,'','ขยายฐานให้ pressure สม่ำเสมอ');
+ const Vu=1.4*(Wt[0][1]+Wt[1][1]+Wt[2][1]+Wt[3][1])+1.7*Wt[4][1],Mru=1.4*(Wt[0][1]*Wt[0][2]+Wt[1][1]*Wt[1][2]+Wt[2][1]*Wt[2][2]+Wt[3][1]*Wt[3][2])+1.7*Wt[4][1]*Wt[4][2],Mou=1.7*Mo,xu=(Mru-Mou)/Vu;if(xu<=0)throw new Error('Mu ไม่สมดุล');
+ const eu=B/2-xu,okk=eu<=B/6,Lc=okk?B:3*xu,qA=okk?Vu/B*(1+6*eu/B):2*Vu/Lc,qB=okk?Vu/B*(1-6*eu/B):0,qf=x=>x<=Lc?qA+(qB-qA)*x/Lc:0;
+ R.st.push(`<b>7) ออกแบบหน้าตัด (SDM, 1.4D+1.7(L+H)):</b> ΣV<sub>u</sub>=${n2(Vu)} t/m, x̄<sub>u</sub>=${n2(xu,3)} m, แรงดันใต้ฐานประลัย q<sub>A</sub>(ปลายเท้า)=${n2(qA)}, q<sub>B</sub>(ปลายส้น)=${n2(qB)} t/m²`);
+ const dSt=tb-cov-DM[dS]/2,dTo=hf-cov-DM[dT]/2,dHe=hf-cov-DM[dH]/2,AsS=BAR[dS]*100/sS,AsT=BAR[dT]*100/sT,AsH=BAR[dH]*100/sH,mn=d=>Math.max(.8*sq(fc)/fy,14/fy)*100*d;
+ const Ms=1.7*(Ka*gs*H**3/6+Ka*q*H*H/2),z=Math.max(0,H-dSt/100),Vs=1.7*(.5*Ka*gs*z*z+Ka*q*z),fS=flex(AsS,0,100,dSt,0,fc,fy,0,0),pVs=.75*.53*sq(fc)*100*dSt/1000;
+ R.st.push(`<b>ก้านกำแพง (ที่โคน):</b> M<sub>u</sub>=1.7(K<sub>a</sub>γH³/6+K<sub>a</sub>qH²/2)=<b>${n2(Ms)}</b> t·m/m; d=${n2(dSt,1)} cm, A<sub>s</sub>=${n2(AsS)} cm²/m, a=${n2(fS.a)} cm, ε<sub>t</sub>=${n2(fS.et,4)}, φM<sub>n</sub>=<b>${n2(fS.M)}</b> t·m/m; V<sub>u</sub>(ที่ d)=${n2(Vs)} t/m, φV<sub>c</sub>=0.75×0.53√f′c·b·d=${n2(pVs)} t/m`);
+ ck(R,'ก้าน: φMn ≥ Mu',Ms,fS.M,'t·m/m','เพิ่มเหล็กก้านหรือความหนาโคน');ck(R,'ก้าน: As ≥ As,min',mn(dSt),AsS,'cm²/m','เพิ่มเหล็ก');ck(R,'ก้าน: φVc ≥ Vu',Vs,pVs,'t/m','เพิ่มความหนาโคนก้าน');ck(R,'ก้าน: ε_t ≥ 0.004',.004,fS.et,'','ลดเหล็กหรือเพิ่มความหนา');ck(R,'ก้าน: ระยะเรียง ≤ min(3t,45)',sS,Math.min(3*tb,45),'cm','ลดระยะเรียง');
+ const wT=1.4*gc*hm,Mt=I(x=>(qf(x)-wT)*(Lt-x),0,Lt),Vt=Lt>dTo/100?I(x=>qf(x)-wT,0,Lt-dTo/100):0,fT=flex(AsT,0,100,dTo,0,fc,fy,0,0),pVb=.75*.53*sq(fc)*100*dTo/1000;
+ R.st.push(`<b>ปลายเท้า (Toe, ดึงล่าง):</b> M<sub>u</sub>=∫(q<sub>u</sub>−1.4γ<sub>c</sub>h<sub>f</sub>)(L<sub>t</sub>−x)dx=<b>${n2(Mt)}</b> t·m/m, V<sub>u</sub>(ที่ d)=${n2(Vt)} t/m; d=${n2(dTo,1)} cm, A<sub>s</sub>=${n2(AsT)} cm²/m, φM<sub>n</sub>=<b>${n2(fT.M)}</b> t·m/m, φV<sub>c</sub>=${n2(pVb)} t/m`);
+ ck(R,'ปลายเท้า: φMn ≥ Mu',Math.max(0,Mt),fT.M,'t·m/m','เพิ่มเหล็กล่างหรือความหนาฐาน');ck(R,'ปลายเท้า: As ≥ As,min',mn(dTo),AsT,'cm²/m','เพิ่มเหล็ก');ck(R,'ปลายเท้า: φVc ≥ Vu',Math.max(0,Vt),pVb,'t/m','เพิ่มความหนาฐาน');
+ const wH=1.4*(gs*H+gc*hm)+1.7*q,Mh=Math.max(0,I(x=>(wH-qf(x))*(x-xs),xs,B)),Vh=xs+dHe/100<B?Math.max(0,I(x=>wH-qf(x),xs+dHe/100,B)):0,fH=flex(AsH,0,100,dHe,0,fc,fy,0,0),pVh=.75*.53*sq(fc)*100*dHe/1000;
+ R.st.push(`<b>ส้นเท้า (Heel, ดึงบน):</b> w<sub>u</sub>=1.4(γH+γ<sub>c</sub>h<sub>f</sub>)+1.7q=${n2(wH)} t/m²; M<sub>u</sub>=∫(w<sub>u</sub>−q<sub>u</sub>)(x−x<sub>s</sub>)dx=<b>${n2(Mh)}</b> t·m/m, V<sub>u</sub>(ที่ d)=${n2(Vh)} t/m; d=${n2(dHe,1)} cm, A<sub>s</sub>=${n2(AsH)} cm²/m, φM<sub>n</sub>=<b>${n2(fH.M)}</b> t·m/m, φV<sub>c</sub>=${n2(pVh)} t/m`);
+ ck(R,'ส้นเท้า: φMn ≥ Mu',Mh,fH.M,'t·m/m','เพิ่มเหล็กบนหรือความหนาฐาน');ck(R,'ส้นเท้า: As ≥ As,min',mn(dHe),AsH,'cm²/m','เพิ่มเหล็ก');ck(R,'ส้นเท้า: φVc ≥ Vu',Vh,pVh,'t/m','เพิ่มความหนาฐาน');ck(R,'ฐาน: ระยะเรียง ≤ min(3h,45)',Math.max(sT,sH),Math.min(3*hf,45),'cm','ลดระยะเรียง');
+ const Vc=ttm*H+.5*(tbm-ttm)*H+B*hm,ws=(AsS*1e-4*(H+.6)+AsT*1e-4*(Lt+tbm+.5)+AsH*1e-4*(Lh+tbm+.5)+.002*(tt+tb)/2*100*1e-4*H+.0018*hf*100*1e-4*B)*7850,Af=2*H+2*hm,cC=Vc*pc+ws*ps+Af*pfm,Vp=.85*Vc,cP=Vp*ppc+ptr,Wp=Vp*Lp*gc,rw=(a,b,c)=>`<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`,df=(cP-cC)/cC*100;
+ R.tb=`<h3>3.1 เปรียบเทียบกับกำแพงกันดิน Precast (ความยาวรวม ${Lw} m)</h3><table><tr><th>รายการ (ต่อ 1 m)</th><th>RC หล่อในที่ (ที่ออกแบบ)</th><th>Precast (ประมาณ)</th></tr>`+rw('ปริมาตรคอนกรีต (m³/m)',n2(Vc,3),n2(Vp,3)+' (×0.85)')+rw('เหล็กเสริมโดยประมาณ (kg/m)',n2(ws,1),n2(ws*.9,1)+' (×0.90)')+rw('พื้นที่แบบหล่อ (m²/m)',n2(Af),'0 (หล่อในโรงงาน)')+rw('ต้นทุนต่อเมตร (บาท)',n2(cC,0),n2(cP,0))+rw('ต้นทุนรวม (บาท)',n2(cC*Lw,0),n2(cP*Lw,0))+rw('ระยะเวลาโดยประมาณ (วัน)',n2(Lw*.6,0)+' (0.6 วัน/m รวมบ่ม)',n2(Lw*.1+7,0)+' (0.1 วัน/m + เตรียมฐาน 7 วัน)')+rw('น้ำหนักแผ่น Precast ยาว '+Lp+' m (t)','—',n2(Wp)+' / เครน '+crane+' t → '+(Wp<=crane?'ผ่าน':'เกินกำลังเครน'))+rw('สรุปต้นทุน','',`${df<0?'ถูกกว่า':'แพงกว่า'} ${n2(Math.abs(df),1)}% เทียบกับหล่อในที่`)+`</table><p style='font-size:12px'>สมมติฐาน: Precast ใช้หน้าตัด L-wall ปรับให้เหมาะสม (คอนกรีต ×0.85, f′c ≥ 350 ksc) ต้องตรวจสอบ FS พลิกคว่ำ/เลื่อนไถล/แรงแบกทานซ้ำตามหัวข้อ 3–6, รอยต่อและตัวยึดระหว่างแผ่น, ชั้นรองพื้น (leveling pad) และระบบระบายน้ำหลังกำแพง ราคาและระยะเวลาเป็นค่าประมาณที่แก้ไขได้ในช่องข้อมูลนำเข้า</p>`;
+ const zs=[],pz=[],qs=[],qx=[],Msz=[];for(let i=0;i<=30;i++){const zz=Ht*i/30;zs.push(+zz.toFixed(2));pz.push(+(Ka*gs*zz+Ka*q).toFixed(3));const zh=H*i/30;Msz.push(+(1.7*(Ka*gs*zh**3/6+Ka*q*zh*zh/2)).toFixed(3));const xx=B*i/30;qx.push(+xx.toFixed(2));qs.push(+(xx<=Lcs?qmx+(qmn-qmx)*xx/Lcs:0).toFixed(3))}
+ R.ch.push({t:'แรงดันดินด้านข้าง σ_h ตามความลึก',x:zs,s:[{l:'σh (t/m²)',d:pz,c:'#f59e0b'}],xl:'ความลึก z (m)',yl:'σh (t/m²)'});R.ch.push({t:'แรงดันใต้ฐานราก (ใช้งาน) จากปลายเท้าถึงปลายส้น',x:qx,s:[{l:'q (t/m²)',d:qs,c:'#16a34a'}],xl:'x จากปลายเท้า (m)',yl:'q (t/m²)'});R.ch.push({t:'โมเมนต์ประลัยก้านกำแพง M_u ตามความลึก',x:Msz.map((_,i)=>(H*i/30).toFixed(2)),s:[{l:'Mu (t·m/m)',d:Msz,c:'#dc2626'}],xl:'ความลึกจากยอด z (m)',yl:'Mu (t·m/m)'})}
+/* ---------- MODULES ---------- */
+const SD=(b)=>b,sh=(...a)=>s=>a.includes(s);
+const MODS=[
+{n:'คาน RC',subs:['คานเดี่ยว (Singly/Doubly)','คานยื่น','คานต่อเนื่อง 2 ช่วง','คานที (T-Beam)'],calc:beam,f:[['b','กว้าง b (cm)',30],['h','ลึก h (cm)',60],['bf','ปีก b_f (cm)',100,0,sh(3)],['hf','หนาปีก h_f (cm)',12,0,sh(3)],['L','ช่วงคาน L (m)',6],['wD','น.น.แผ่กระจาย คงที่เพิ่ม w_D (kg/m)',1500],['wL','น.น.แผ่กระจาย จร w_L (kg/m)',1000],['P1D','น.น.จุดที่ 1 คงที่ (kg)',2000],['P1L','น.น.จุดที่ 1 จร (kg)',1000],['a1','ตำแหน่งจุดที่ 1 x (m)',3],['P2D','น.น.จุดที่ 2 คงที่ (kg)',0],['P2L','น.น.จุดที่ 2 จร (kg)',0],['a2','ตำแหน่งจุดที่ 2 x (m)',4.5],['cov','ระยะหุ้ม (cm)',3],['nT','จำนวนเหล็กบน',2],['dT','ขนาดเหล็กบน','DB16',MB],['nB','จำนวนเหล็กล่าง',4],['dB','ขนาดเหล็กล่าง','DB20',MB],['ds','เหล็กปลอก','RB9',SB],['sp','ระยะปลอก (cm)',15],['xT','★ เหล็กพิเศษบนที่จุดรองรับ (เส้น)',0],['dXT','ขนาดเหล็กพิเศษบน','DB16',MB],['lXT','ความยาวเหล็กพิเศษบนจากผิวรองรับ (m)',1.5],['xB','★ เหล็กพิเศษล่างกลางช่วง (เส้น)',0],['dXB','ขนาดเหล็กพิเศษล่าง','DB16',MB],['xS','★ เหล็กเสริมข้าง ต่อด้าน (เส้น)',0],['dXS','ขนาดเหล็กข้าง','DB12',MB],['sp2','★ ระยะปลอกถี่ปลายคาน (cm, 0=ไม่ใช้)',0],['l2','ความยาวโซนปลอกถี่ (m)',1.2]]},
+{n:'เสา RC',subs:['สี่เหลี่ยมสั้น','สี่เหลี่ยมชะลูด','กลมสั้น','กลมชะลูด'],calc:col,f:[['b','กว้าง b (cm)',40,0,sh(0,1)],['h','ลึก h (cm)',40,0,sh(0,1)],['D','เส้นผ่านศูนย์กลาง D (cm)',45,0,sh(2,3)],['nx','เหล็กต่อด้านบน/ล่าง',3,0,sh(0,1)],['ny','เหล็กเพิ่มด้านข้างข้างละ',1,0,sh(0,1)],['nc','จำนวนเหล็กแกน',8,0,sh(2,3)],['dm','ขนาดเหล็กแกน','DB20',MB],['ds','เหล็กปลอก','RB9',SB],['tp','ชนิดปลอก','Tied',['Tied','Spiral']],['sp','ระยะปลอก (cm)',15],['cov','ระยะหุ้ม (cm)',4],['PD','แรงอัด D (t)',60],['PL','แรงอัด L (t)',30],['MD','โมเมนต์ D (t·m)',4],['ML','โมเมนต์ L (t·m)',3],['Lu','ความสูงอิสระ L_u (m)',3.5],['k','ตัวคูณ k',1]]},
+{n:'พื้น RC',subs:['ทางเดียว','ยื่น','สองทาง','ไร้คาน/พื้นแบน','สำเร็จรูป (Flat/Hollow core)'],calc:slab,f:[['h','ความหนา h (cm)',12],['L','ช่วง L (m)',3.5,0,sh(0,1,4)],['Lx','ช่วงสั้น Lx (m)',3,0,sh(2)],['Ly','ช่วงยาว Ly (m)',4.5,0,sh(2)],['L1','ช่วง L1 (m)',6,0,sh(3)],['L2','ช่วง L2 (m)',6,0,sh(3)],['c','ขนาดเสา c (cm)',40,0,sh(3)],['pc','ชนิดสำเร็จรูป','Hollow core',['Flat plank','Hollow core'],sh(4)],['SDL','น.น.คงที่เพิ่ม (kg/m²)',150],['LL','น.น.จร (kg/m²)',300],['cov','ระยะหุ้ม (cm)',2],['db','ขนาดเหล็ก','DB12',SL],['sp','ระยะเรียง (cm)',15]]},
+{n:'ฐานรากแผ่',subs:['เดี่ยว','ร่วม','ชิดเขต'],calc:foot,f:[['B','กว้าง B (m)',2],['L','ยาว L (m)',2.5],['h','หนา h (cm)',50],['c1','เสา c1 ตามแนว L (cm)',30],['c2','เสา c2 (cm)',30],['PD1','เสา 1 D (t)',40],['PL1','เสา 1 L (t)',20],['PD2','เสา 2 D (t)',40,0,sh(1)],['PL2','เสา 2 L (t)',20,0,sh(1)],['e1','ตำแหน่งเสา 1 จากขอบ (m)',.5,0,sh(1)],['s','ระยะห่างเสา (m)',2,0,sh(1)],['qa','กำลังแบกทานดินสุทธิ q_a (t/m²)',20],['cov','ระยะหุ้ม (cm)',7.5],['db','ขนาดเหล็ก','DB16',MB],['sp','ระยะเรียง (cm)',15]]},
+{n:'ฐานรากเสาเข็ม',subs:['1 ต้น','2 ต้น','3 ต้น','4 ต้น','5 ต้น'],calc:pile,f:[['dp','เส้นผ่านศูนย์กลางเข็ม (cm)',35],['Ra','กำลังรับเข็ม (t/ต้น)',40],['s','ระยะเข็ม (cm)',105],['B','กว้างฐาน B (cm)',170],['L','ยาวฐาน L (cm)',170],['h','หนา h (cm)',70],['c1','เสา c1 (cm)',30],['c2','เสา c2 (cm)',30],['PD','แรง D (t)',60],['PL','แรง L (t)',30],['Mx','โมเมนต์ใช้งาน (t·m)',0],['cov','ระยะหุ้ม (cm)',7.5],['db','ขนาดเหล็ก','DB16',MB],['nb','จำนวนเหล็กต่อทิศ',9]]},
+{n:'บันได RC',subs:['ท้องเรียบ','พับผ้า','บันไดวน'],calc:stair,f:[['n','จำนวนขั้น',12],['Rr','ลูกตั้ง (cm)',17.5],['T','ลูกนอน (cm)',25],['t','ความหนาแม่บันได (cm)',15],['LB','ความยาวชานพัก (m)',1.2,0,sh(1)],['Rm','รัศมีเฉลี่ย (m)',1.5,0,sh(2)],['th','มุมรวม (องศา)',270,0,sh(2)],['SDL','น.น.คงที่เพิ่ม (kg/m²)',120],['LL','น.น.จร (kg/m²)',300],['cov','ระยะหุ้ม (cm)',2.5],['db','ขนาดเหล็ก','DB12',SL],['sp','ระยะเรียง (cm)',12]]}];
+MODS.push({n:'กำแพงกันดิน RC',subs:['กำแพงยื่น (Cantilever)','กำแพงยื่น + Shear key'],calc:wall,f:[['H','ความสูงก้านกำแพง H (m)',3],['hf','ความหนาฐาน h_f (cm)',40],['B','ความกว้างฐานรวม B (m)',2.4],['Lt','ความยาวปลายเท้า L_toe (m)',.6],['tt','หนาปลายบนก้าน (cm)',25],['tb','หนาโคนก้าน t_b (cm)',35],['gs','γ ดินถม (t/m³)',1.8],['ph','φ ดินถม (°)',30],['q','น.น.บรรทุกบนดินถม q (t/m²)',1],['pf','φ ดินฐานราก φ_f (°)',28],['cf','c ดินฐานราก (t/m²)',0],['Df','ความลึกดินหน้ากำแพง D_f (m)',.8],['qa','q_a ดินฐานราก (t/m²)',25],['Es','E_s ดินฐานราก (t/m²)',3000],['Sa','การทรุดตัวยอมให้ (cm)',2.5],['hk','ความลึก shear key (m)',.4,0,sh(1)],['pp','คิดแรงต้านดินหน้ากำแพง','ไม่คิด',['ไม่คิด','คิด'],sh(0)],['cov','ระยะหุ้ม (cm)',5],['dS','เหล็กก้าน (ด้านหลัง)','DB16',MB],['sS','ระยะเรียงเหล็กก้าน (cm)',15],['dT','เหล็กปลายเท้า (ล่าง)','DB16',MB],['sT','ระยะเรียงปลายเท้า (cm)',20],['dH','เหล็กส้นเท้า (บน)','DB16',MB],['sH','ระยะเรียงส้นเท้า (cm)',15],['Lw','ความยาวกำแพงรวม (m)',20],['pc','ราคาคอนกรีตหล่อในที่ (บาท/m³)',3000],['ps','ราคาเหล็ก (บาท/kg)',28],['pfm','ราคาแบบหล่อ (บาท/m²)',350],['ppc','ราคา Precast รวมเหล็ก (บาท/m³)',7500],['ptr','ขนส่ง+ติดตั้ง Precast (บาท/m)',1200],['Lp','ความยาวแผ่น Precast (m)',2],['crane','กำลังเครน (t)',12]]});
+let cur=0,sub=0,charts=[];
+function form(){const m=MODS[cur];$('#fl').innerHTML=m.f.filter(f=>!f[4]||f[4](sub)).map(f=>`<label>${f[1]}${f[3]?`<select id="f_${f[0]}">${f[3].map(o=>`<option${o==f[2]?' selected':''}>${o}</option>`).join('')}</select>`:`<input id="f_${f[0]}" type="number" step="any" value="${f[2]}">`}</label>`).join('')}
+function pick(i){cur=i;sub=0;document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('on',j==i));$('#sub').innerHTML=MODS[i].subs.map((s,j)=>`<option value="${j}">${s}</option>`).join('');form()}
+$('#tabs').innerHTML=MODS.map((m,i)=>`<button onclick="pick(${i})">${i+1}. ${m.n}</button>`).join('');$('#sub').onchange=e=>{sub=+e.target.value;form()};pick(0);
+function run(){const m=MODS[cur],v={},R={st:[],ck:[],sg:[],ch:[]};
+ m.f.forEach(f=>{const e=$('#f_'+f[0]);if(e){const x=e.value;v[f[0]]=x!==''&&!isNaN(x)?+x:x}});v.fc=+$('#f_fc').value;v.g=$('#f_g').value;v.fy=G[v.g];for(const k in BAR0)BAR[k]=k[0]=='R'?BAR0[k]*2400/v.fy:BAR0[k];
+ try{m.calc(v,sub,R)}catch(e){R.st.push('เกิดข้อผิดพลาด: '+e.message)}show(R,v)}
+/* ---------- 3D MODEL ---------- */
+let T3=null;
+function view3d(ix,sb,v){try{
+ if(T3){cancelAnimationFrame(T3.id);T3.r.dispose();T3=null}
+ const el=document.getElementById('v3');if(!el||!window.THREE)return;
+ const TH=THREE,W=el.clientWidth||600,Hh=360,sc=new TH.Scene(),cam=new TH.PerspectiveCamera(40,W/Hh,1,1e6),r=new TH.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true}),cv=r.domElement;
+ r.setSize(W,Hh);r.setPixelRatio(Math.min(2,devicePixelRatio||1));el.appendChild(cv);cv.style.touchAction='none';
+ sc.add(new TH.AmbientLight(0xffffff,.85));const dl=new TH.DirectionalLight(0xffffff,.7);dl.position.set(1,2,1.5);sc.add(dl);
+ const g=new TH.Group(),OR=0xe8590c,BL=0x1c7ed6,GR=0x2f9e44,cm=[];sc.add(g);
+ const V3=a=>new TH.Vector3(a[0],a[1],a[2]);
+ const bar=(a,b,d,c)=>{a=V3(a);b=V3(b);const L=a.distanceTo(b);if(L<.1)return;const m=new TH.Mesh(new TH.CylinderGeometry(d/2,d/2,L,8),new TH.MeshStandardMaterial({color:c,metalness:.3,roughness:.5}));m.position.copy(a).add(b).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new TH.Vector3(0,1,0),b.clone().sub(a).normalize());g.add(m)};
+ const tube=(pts,d,c)=>g.add(new TH.Mesh(new TH.TubeGeometry(new TH.CatmullRomCurve3(pts),pts.length*2,d/2,6,false),new TH.MeshStandardMaterial({color:c})));
+ const cc=(geo,x,y,z,ry=0,rz=0)=>{const m=new TH.Mesh(geo,new TH.MeshStandardMaterial({color:0x9aa7b8,transparent:true,opacity:.2,depthWrite:false}));m.position.set(x,y,z);m.rotation.y=ry;m.rotation.z=rz;cm.push(m.material);g.add(m);const e=new TH.LineSegments(new TH.EdgesGeometry(geo,25),new TH.LineBasicMaterial({color:0x64748b}));e.position.copy(m.position);e.rotation.copy(m.rotation);g.add(e)};
+ const box=(w,h,d,x,y,z,ry,rz)=>cc(new TH.BoxGeometry(w,h,d),x,y,z,ry,rz);
+ const stat=(w,h,d,x,y,z)=>{const m=new TH.Mesh(new TH.BoxGeometry(w,h,d),new TH.MeshStandardMaterial({color:0x6b7280}));m.position.set(x,y,z);g.add(m)};
+ const lx=(x,y0,y1,z0,z1,d,c)=>{bar([x,y0,z0],[x,y1,z0],d,c);bar([x,y1,z0],[x,y1,z1],d,c);bar([x,y1,z1],[x,y0,z1],d,c);bar([x,y0,z1],[x,y0,z0],d,c)};
+ const ly=(y,x0,x1,z0,z1,d,c)=>{bar([x0,y,z0],[x1,y,z0],d,c);bar([x1,y,z0],[x1,y,z1],d,c);bar([x1,y,z1],[x0,y,z1],d,c);bar([x0,y,z1],[x0,y,z0],d,c)};
+ const rg=(a,b,s)=>{const o=[],n=Math.max(1,Math.round((b-a)/s));for(let i=0;i<=n;i++)o.push(a+(b-a)*i/n);return o};
+ if(ix==0){const{b,h,L,cov,nT,dT,nB,dB,ds,sp,bf,hf}=v,Lc=L*100*(sb==2?2:1),sd=DM[ds];
+  box(Lc,h,b,Lc/2,h/2,0);if(sb==3)box(Lc,hf,bf,Lc/2,h-hf/2,0);
+  const row=(n,y,dia)=>{const e=cov+sd+dia/2;for(let i=0;i<n;i++){const z=n>1?-b/2+e+(b-2*e)*i/(n-1):0;bar([cov,y,z],[Lc-cov,y,z],dia,OR)}};
+  row(nB,cov+sd+DM[dB]/2,DM[dB]);row(nT,h-cov-sd-DM[dT]/2,DM[dT]);
+  const p=cov+sd/2,l2=v.sp2>0?v.l2*100:0,Ls=L*100,xl=[];for(let x=cov+5;x<Lc-cov;){xl.push(x);const inz=l2&&(x<l2||x>Lc-l2||(sb==2&&Math.abs(x-Ls)<l2));x+=Math.max(inz?v.sp2:sp,Lc/90)}xl.forEach(x=>lx(x,p,h-p,-b/2+p,b/2-p,sd,BL));
+  const ex=(n,dia,y,a,c)=>{const e=cov+sd+dia/2;for(let i=0;i<n;i++){const z=n>1?-b/2+e+(b-2*e)*i/(n-1):0;bar([a,y,z],[c,y,z],dia,OR)}};
+  if(v.xB>0)(sb==2?[[.1,.9],[1.1,1.9]]:[[.1,.9]]).forEach(q=>ex(v.xB,DM[v.dXB],cov+sd+DM[dB]+2.5+DM[v.dXB]/2,Ls*q[0],Ls*q[1]));
+  if(v.xT>0){const yt=h-cov-sd-DM[dT]-2.5-DM[v.dXT]/2,l=v.lXT*100;(sb==1?[[0,l]]:sb==2?[[Ls-l,Ls+l]]:[[0,l],[Lc-l,Lc]]).forEach(q=>ex(v.xT,DM[v.dXT],yt,Math.max(cov,q[0]),Math.min(Lc-cov,q[1])))}
+  if(v.xS>0){const dia=DM[v.dXS],zz=b/2-cov-sd-dia/2;for(let i=0;i<v.xS;i++){const y=h*.25+h*.5*i/Math.max(1,v.xS-1);bar([cov,y,zz],[Lc-cov,y,zz],dia,GR);bar([cov,y,-zz],[Lc-cov,y,-zz],dia,GR)}}
+  if(sb==1)stat(30,h+60,b+60,-15,h/2,0);else[0,sb==2?Lc/2:null,Lc].forEach(x=>x!==null&&stat(30,25,b+10,x,-12,0))}
+ else if(ix==1){const{cov,dm,ds,sp,Lu}=v,sd=DM[ds],db=DM[dm],Hc=Math.min(Lu*100,400),cr=sb>=2;
+  if(!cr){const{b,h,nx,ny}=v,e=cov+sd+db/2,P=[];box(b,Hc,h,0,Hc/2,0);
+   for(let i=0;i<nx;i++){const x=nx>1?-b/2+e+(b-2*e)*i/(nx-1):0;P.push([x,h/2-e],[x,-h/2+e])}
+   for(let j=1;j<=ny;j++){const z=-h/2+e+(h-2*e)*j/(ny+1);P.push([-b/2+e,z],[b/2-e,z])}
+   P.forEach(q=>bar([q[0],cov,q[1]],[q[0],Hc-cov,q[1]],db,OR));
+   const p=cov+sd/2;rg(sp/2+cov,Hc-cov,Math.max(sp,Hc/60)).forEach(y=>ly(y,-b/2+p,b/2-p,-h/2+p,h/2-p,sd,BL))}
+  else{const D=v.D,n=v.nc,rr=D/2-cov-sd-db/2;cc(new TH.CylinderGeometry(D/2,D/2,Hc,48),0,Hc/2,0);
+   for(let i=0;i<n;i++){const a=2*Math.PI*i/n;bar([rr*Math.cos(a),cov,rr*Math.sin(a)],[rr*Math.cos(a),Hc-cov,rr*Math.sin(a)],db,OR)}
+   rg(sp/2+cov,Hc-cov,Math.max(sp,Hc/60)).forEach(y=>{const t=new TH.Mesh(new TH.TorusGeometry(D/2-cov-sd/2,sd/2,6,40),new TH.MeshStandardMaterial({color:BL}));t.rotation.x=Math.PI/2;t.position.y=y;g.add(t)})}
+  stat((v.b||v.D)+60,20,(v.h||v.D)+60,0,-10,0)}
+ else if(ix==2){const{h,cov,db,sp}=v,dia=DM[db],Lx=(sb==2?v.Lx:sb==3?v.L1:v.L)*100,Lz=sb==2?v.Ly*100:sb==3?v.L2*100:Math.min(Lx,300);
+  box(Lx,h,Lz,Lx/2,h/2,Lz/2);
+  if(sb==4&&v.pc=='Hollow core')rg(60,Lz-60,120).forEach(z=>cc(new TH.CylinderGeometry(h*.3,h*.3,Lx,24),Lx/2,h/2,z,0,Math.PI/2));
+  const one=sb<2||sb==4,yb=sb==1?h-cov-dia/2:cov+dia/2,y2=sb==1?yb-dia:yb+dia;
+  rg(cov,Lz-cov,Math.max(sp,Lz/55)).forEach(z=>bar([cov,yb,z],[Lx-cov,yb,z],dia,OR));
+  rg(cov,Lx-cov,Math.max(one?25:sp,Lx/55)).forEach(x=>bar([x,y2,cov],[x,y2,Lz-cov],one?dia*.8:dia,one?GR:OR));
+  if(sb==3){const c=v.c;box(c,100,c,Lx/2,-50,Lz/2);rg(Lz/2-c,Lz/2+c,sp).forEach(z=>bar([Lx/2-Lx/4,h-cov-dia/2,z],[Lx/2+Lx/4,h-cov-dia/2,z],dia,OR))}
+  if(sb==1)stat(30,h+60,Lz+40,-15,h/2,Lz/2)}
+ else if(ix==3){const{h,cov,db,sp,c1,c2}=v,dia=DM[db],Bz=v.B*100,Lx=v.L*100,y1=cov+dia/2,y2=y1+dia;
+  box(Lx,h,Bz,Lx/2,h/2,0);
+  rg(-Bz/2+cov,Bz/2-cov,Math.max(sp,Bz/50)).forEach(z=>bar([cov,y1,z],[Lx-cov,y1,z],dia,OR));
+  rg(cov,Lx-cov,Math.max(sp,Lx/50)).forEach(x=>bar([x,y2,-Bz/2+cov],[x,y2,Bz/2-cov],dia,OR));
+  (sb==1?[v.e1*100,(v.e1+v.s)*100]:sb==2?[c1/2]:[Lx/2]).forEach(x=>{box(c1,80,c2,x,h+40,0);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(q=>bar([x+q[0]*(c1/2-5),y2+dia,q[1]*(c2/2-5)],[x+q[0]*(c1/2-5),h+75,q[1]*(c2/2-5)],1.6,OR));[h+10,h+40,h+70].forEach(y=>ly(y,x-c1/2+3,x+c1/2-3,-c2/2+3,c2/2-3,1,BL))})}
+ else if(ix==4){const{h,cov,db,nb,c1,c2,dp,s,B,L}=v,dia=DM[db],n=sb+1,k=.7071,y1=cov+dia/2,y2=y1+dia,P={1:[[0,0]],2:[[-s/2,0],[s/2,0]],3:[[-s/2,-s*.2887],[s/2,-s*.2887],[0,s*.5774]],4:[[-s/2,-s/2],[s/2,-s/2],[-s/2,s/2],[s/2,s/2]],5:[[-s*k,-s*k],[s*k,-s*k],[-s*k,s*k],[s*k,s*k],[0,0]]}[n],ps_=(a,b)=>nb>1?Array.from({length:nb},(_,i)=>a+(b-a)*i/(nb-1)):[(a+b)/2];
+  box(B,h,L,0,h/2,0);P.forEach(p=>cc(new TH.CylinderGeometry(dp/2,dp/2,120,32),p[0],-50,p[1]));
+  ps_(-L/2+cov+dia,L/2-cov-dia).forEach(z=>bar([-B/2+cov,y1,z],[B/2-cov,y1,z],dia,OR));
+  ps_(-B/2+cov+dia,B/2-cov-dia).forEach(x=>bar([x,y2,-L/2+cov],[x,y2,L/2-cov],dia,OR));
+  box(c1,80,c2,0,h+40,0);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(q=>bar([q[0]*(c1/2-5),y2+dia,q[1]*(c2/2-5)],[q[0]*(c1/2-5),h+75,q[1]*(c2/2-5)],1.6,OR))}
+ else if(ix==5){const{n,Rr,T,t,cov,db,sp}=v,dia=DM[db],W=120;
+  if(sb<2){const nT=n*T,nR=n*Rr,al=Math.atan(Rr/T),Ls=Math.hypot(nT,nR),nx=-Math.sin(al),ny=Math.cos(al),off=-(t-cov-dia/2),off2=-(t-cov-dia*1.5);
+   cc(new TH.BoxGeometry(Ls,t,W),nT/2-nx*t/2,nR/2-ny*t/2,0,0,al);
+   for(let i=0;i<n;i++)box(T,Rr,W,i*T+T/2,i*Rr+Rr/2,0);
+   const Ax=nx*off,Ay=ny*off,Bx=nT+nx*off,By=nR+ny*off,LB=sb==1?v.LB*100:0;
+   if(sb==1)box(LB,t,W,nT+LB/2,nR-t/2,0);
+   rg(-W/2+cov,W/2-cov,sp).forEach(z=>{bar([Ax,Ay,z],[Bx,By,z],dia,OR);if(LB)bar([Bx,By,z],[nT+LB-cov,By,z],dia,OR)});
+   rg(cov,Ls-cov,25).forEach(f=>{const px=f*Math.cos(al)+nx*off2,py=f*Math.sin(al)+ny*off2;bar([px,py,-W/2+cov],[px,py,W/2-cov],dia*.8,GR)})}
+  else{const rm=v.Rm*100,dth=v.th*Math.PI/180/n;
+   for(let i=0;i<n;i++){const a=i*dth;cc(new TH.BoxGeometry(2*rm*Math.sin(dth/2)*1.02+1,Rr,110),rm*Math.cos(a),i*Rr+Rr/2,rm*Math.sin(a),Math.PI/2-a);const y=i*Rr+cov+dia*1.5;bar([(rm-48)*Math.cos(a),y,(rm-48)*Math.sin(a)],[(rm+48)*Math.cos(a),y,(rm+48)*Math.sin(a)],dia*.8,GR)}
+   [-40,-14,14,40].forEach(o=>{const pts=[];for(let k=0;k<=n*6;k++){const f=k/6,a=f*dth;pts.push(new TH.Vector3((rm+o)*Math.cos(a),f*Rr+cov+dia/2+2,(rm+o)*Math.sin(a)))}tube(pts,dia,OR)})}}
+ else{const{H,hf,B,Lt,tt,tb,cov,dS,sS,dT,sT,dH,sH}=v,Hc=H*100,Bc=B*100,Lc=Lt*100,Z=150,shp=new TH.Shape();
+  [[0,0],[Bc,0],[Bc,hf],[Lc+tb,hf],[Lc+tb,hf+Hc],[Lc+tb-tt,hf+Hc],[Lc,hf],[0,hf]].forEach((p,i)=>i?shp.lineTo(p[0],p[1]):shp.moveTo(p[0],p[1]));
+  const geo=new TH.ExtrudeGeometry(shp,{depth:Z,bevelEnabled:false});geo.translate(0,0,-Z/2);cc(geo,0,0,0);
+  if(sb==1)box(40,v.hk*100,Z,Lc+tb/2,-v.hk*50,0);
+  const zs=s=>rg(-Z/2+cov,Z/2-cov,s),xb=Lc+tb-cov-DM[dS]/2,yT=cov+DM[dT]/2,yH=hf-cov-DM[dH]/2;
+  zs(sS).forEach(z=>bar([xb,cov+DM[dT],z],[xb,hf+Hc-cov,z],DM[dS],OR));
+  zs(sT).forEach(z=>bar([cov,yT,z],[Lc+tb+40,yT,z],DM[dT],OR));
+  zs(sH).forEach(z=>bar([Lc+tb-40,yH,z],[Bc-cov,yH,z],DM[dH],OR));
+  rg(hf+15,hf+Hc-10,30).forEach(y=>bar([xb-DM[dS]/2-.6,y,-Z/2+cov],[xb-DM[dS]/2-.6,y,Z/2-cov],1.2,GR));
+  rg(cov,Lc+tb,30).forEach(x=>bar([x,yT+DM[dT]/2+.7,-Z/2+cov],[x,yT+DM[dT]/2+.7,Z/2-cov],1.2,GR));
+  rg(Lc+tb,Bc-cov,30).forEach(x=>bar([x,yH-DM[dH]/2-.7,-Z/2+cov],[x,yH-DM[dH]/2-.7,Z/2-cov],1.2,GR))}
+ const bb=new TH.Box3().setFromObject(g),c=bb.getCenter(new TH.Vector3()),sz=bb.getSize(new TH.Vector3());g.position.sub(c);
+ const o3={a:.8,b:1.15,d:Math.max(sz.x,sz.y,sz.z)*2.1,auto:1};let dn=0,px=0,py=0;
+ cv.onpointerdown=e=>{dn=1;o3.auto=0;px=e.clientX;py=e.clientY;cv.setPointerCapture(e.pointerId)};
+ cv.onpointermove=e=>{if(!dn)return;o3.a-=(e.clientX-px)*.008;o3.b=Math.max(.1,Math.min(3.04,o3.b-(e.clientY-py)*.008));px=e.clientX;py=e.clientY};
+ cv.onpointerup=()=>{dn=0};cv.onwheel=e=>{e.preventDefault();o3.d*=e.deltaY>0?1.1:.9};
+ window.v3z=k=>{o3.d*=k};window.v3a=()=>{o3.auto=o3.auto?0:1};window.v3t=()=>{const s=cm[0]&&cm[0].opacity<.1;cm.forEach(m=>m.opacity=s?.2:.6)};
+ T3={r,id:0};const loop=()=>{if(o3.auto)o3.a+=.004;cam.position.set(o3.d*Math.sin(o3.b)*Math.cos(o3.a),o3.d*Math.cos(o3.b),o3.d*Math.sin(o3.b)*Math.sin(o3.a));cam.lookAt(0,0,0);r.render(sc,cam);T3.id=requestAnimationFrame(loop)};loop();
+}catch(e){console.error(e)}}
+function show(R,v){const m=MODS[cur],ok=R.ck.length&&R.ck.every(c=>c.ok),P=i=>$('#p'+i).value||'-';
+ const inp=m.f.filter(f=>!f[4]||f[4](sub)).map(f=>`<tr><td>${f[1]}</td><td>${v[f[0]]}</td></tr>`).join('');
+ $('#out').innerHTML=`<div class="rep"><div class="rh"><div><h2>รายการคำนวณ${m.n}${P(5)!='-'?' ('+P(5)+')':''} – ${m.subs[sub]}</h2><small>วิธีกำลัง (SDM) • ACI 318 / วสท. / มยผ. • เหล็ก มอก.20-2559, 24-2559</small></div><span class="bd ${ok?'ok':'no'}">${ok?'PASS ผ่าน':'FAIL ไม่ผ่าน'}</span></div>
+ <table style="margin-top:8px"><tr><td>โครงการ</td><td>${P(1)}</td><td>สถานที่</td><td>${P(2)}</td></tr><tr><td>ผู้ออกแบบ</td><td>${P(3)}</td><td>ใบอนุญาต</td><td>${P(4)}</td></tr><tr><td>ชื่อชิ้นงาน</td><td colspan="3">${P(5)}</td></tr><tr><td>วันที่</td><td>${new Date().toLocaleDateString('th-TH')}</td><td>วัสดุ</td><td>f′c=${v.fc} ksc, ${v.g} (fy=${v.fy} ksc)</td></tr></table>
+ <h3>1. ข้อมูลนำเข้า</h3><table>${inp}</table><h3>2. ขั้นตอนการคำนวณ</h3><ol>${R.st.map(s=>`<li>${s}</li>`).join('')}</ol>
+ <h3>3. สรุปการตรวจสอบ</h3><table><tr><th>รายการ</th><th>ต้องการ</th><th>ที่มี</th><th>สถานะ</th></tr>${R.ck.map(c=>`<tr><td>${c.n}</td><td>${n2(c.dem,3)} ${c.u}</td><td>${n2(c.cap,3)} ${c.u}</td><td class="${c.ok?'p':'f'}">${c.ok?'ผ่าน':'ไม่ผ่าน'}</td></tr>`).join('')}</table>
+ ${R.sg.length?`<h3>ข้อเสนอแนะ</h3><div class="sg"><ul>${R.sg.map(s=>`<li>${s}</li>`).join('')}</ul></div>`:''}
+ ${R.tb||''}<h3>4. แผนภาพ</h3>${R.ch.map((c,i)=>`<div class="cv"><canvas id="cv${i}"></canvas></div>`).join('')}<h3>5. แบบจำลอง 3 มิติ (เห็นเหล็กเสริมภายใน)</h3><div id="v3" class="v3"></div><div class="noprint"><button class="pb" onclick="v3t()">คอนกรีตทึบ/โปร่งใส</button> <button class="pb" onclick="v3z(.8)">ซูมเข้า</button> <button class="pb" onclick="v3z(1.25)">ซูมออก</button> <button class="pb" onclick="v3a()">หมุนอัตโนมัติ</button></div><p style="font-size:12px">ลากเมาส์/นิ้วเพื่อหมุน • <span style="color:#e8590c">■</span> เหล็กหลัก <span style="color:#1c7ed6">■</span> เหล็กปลอก/เหล็กรัด <span style="color:#2f9e44">■</span> เหล็กกระจาย • แสดงตามหน้าตัดและจำนวนเหล็กที่กรอก (ความยาวบางส่วนถูกย่อเพื่อการแสดงผล)</p><p class="ft">พัฒนาระบบโดย นายปวินท์วัฒน์ สุขขี • ผลการคำนวณใช้ประกอบการพิจารณาของวิศวกรผู้ออกแบบ • เหล็กกลม SR24 (fy=2400) คิดเป็นพื้นที่เทียบเท่าที่ fy ของเกรด SD ที่เลือก</p></div><button class="pb noprint" onclick="print()">ส่งออก PDF (พิมพ์ → บันทึกเป็น PDF)</button>`;
+ charts.forEach(c=>c.destroy());charts=R.ch.map((c,i)=>mk(c,i));view3d(cur,sub,v);$('#out').scrollIntoView({behavior:'smooth'})}
+function mk(c,i){const xy=!!c.xy,col=['#2563eb','#16a34a','#f59e0b'];
+ return new Chart($('#cv'+i),{type:xy?'scatter':c.bar?'bar':'line',data:{labels:c.x,datasets:c.s.map((s,j)=>({label:s.l,data:s.d,borderColor:s.c||col[j],backgroundColor:(s.c||col[j])+(c.bar?'cc':'33'),fill:!xy&&!c.bar&&j==0,pointRadius:s.pr??0,showLine:s.line??true,tension:.2,borderWidth:2}))},
+ options:{animation:{duration:1400,easing:'easeOutQuart'},responsive:true,maintainAspectRatio:false,scales:{x:{type:xy?'linear':'category',ticks:{maxTicksLimit:9},title:{display:true,text:c.xl}},y:{reverse:!!c.rev,title:{display:true,text:c.yl}}},plugins:{title:{display:true,text:c.t}}}})}
+</script></body></html>
